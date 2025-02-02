@@ -30,8 +30,16 @@ public:
     /** Add a new orphan transaction */
     bool AddTx(const CTransactionRef& tx, NodeId peer);
 
+    /** Add an additional announcer to an orphan if it exists. Otherwise, do nothing. */
+    bool AddAnnouncer(const Wtxid& wtxid, NodeId peer);
+
+    CTransactionRef GetTx(const Wtxid& wtxid) const;
+
     /** Check if we already have an orphan transaction (by wtxid only) */
     bool HaveTx(const Wtxid& wtxid) const;
+
+    /** Check if a {tx, peer} exists in the orphanage.*/
+    bool HaveTxFromPeer(const Wtxid& wtxid, NodeId peer) const;
 
     /** Extract a transaction from a peer's work set
      *  Returns nullptr if there are no transactions to work on.
@@ -43,7 +51,8 @@ public:
     /** Erase an orphan by wtxid */
     int EraseTx(const Wtxid& wtxid);
 
-    /** Erase all orphans announced by a peer (eg, after that peer disconnects) */
+    /** Maybe erase all orphans announced by a peer (eg, after that peer disconnects). If an orphan
+     * has been announced by another peer, don't erase, just remove this peer from the list of announcers. */
     void EraseForPeer(NodeId peer);
 
     /** Erase all orphans included in or invalidated by a new block */
@@ -62,21 +71,24 @@ public:
      * recent to least recent. */
     std::vector<CTransactionRef> GetChildrenFromSamePeer(const CTransactionRef& parent, NodeId nodeid) const;
 
-    /** Get all children that spend from this tx but were not received from nodeid. Also return
-     * which peer provided each tx. */
-    std::vector<std::pair<CTransactionRef, NodeId>> GetChildrenFromDifferentPeer(const CTransactionRef& parent, NodeId nodeid) const;
-
     /** Return how many entries exist in the orphange */
-    size_t Size()
+    size_t Size() const
     {
         return m_orphans.size();
     }
 
-protected:
-    struct OrphanTx {
+    /** Allows providing orphan information externally */
+    struct OrphanTxBase {
         CTransactionRef tx;
-        NodeId fromPeer;
+        /** Peers added with AddTx or AddAnnouncer. */
+        std::set<NodeId> announcers;
         NodeSeconds nTimeExpire;
+    };
+
+    std::vector<OrphanTxBase> GetOrphanTransactions() const;
+
+protected:
+    struct OrphanTx : public OrphanTxBase {
         size_t list_pos;
     };
 
